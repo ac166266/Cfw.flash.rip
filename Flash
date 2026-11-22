@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Scooter BLE Flasher (Ninebot / Xiaomi / iOS)</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      padding: 16px;
+    }
+    .card {
+      background: #1e293b;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border: 1px solid #334155;
+    }
+    h2, h3 { margin-top: 0; }
+    label { display: block; font-size: 0.85rem; color: #94a3b8; margin-top: 10px; }
+    input, select {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 11px;
+      margin-top: 4px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #fff;
+      font-size: 0.95rem;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      margin-top: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-flash { background: #ef4444; color: white; }
+    .btn-flash:disabled, .btn-reset:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-reset { background: #10b981; color: white; }
+    .badge {
+      display: inline-block;
+      background: #334155;
+      color: #38bdf8;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      margin-bottom: 8px;
+    }
+    .warning-box {
+      background: #451a03;
+      border: 1px solid #f59e0b;
+      color: #fde68a;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      margin-top: 12px;
+      line-height: 1.4;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 12px;
+      font-size: 0.88rem;
+    }
+    .checkbox-row input { width: auto; margin-top: 3px; transform: scale(1.2); }
+    pre {
+      background: #020617;
+      color: #34d399;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      overflow-x: auto;
+      max-height: 200px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <span class="badge">iOS Bluefy Web-BLE</span>
+    <h2>🛴 Ninebot & Multi-Scooter Tool</h2>
+
+    <label>Scooter-Modell wählen</label>
+    <select id="modelSelect">
+      <option value="nb_max_g30">Segway Ninebot MAX G30 / G30D / G30LP</option>
+      <option value="nb_g2">Segway Ninebot MAX G2 / G2D</option>
+      <option value="nb_f_series">Segway Ninebot F2 / F2 Plus / F2 Pro / F-Serie</option>
+      <option value="nb_gen3">Segway Ninebot G3 / ZT3 Pro / GT3 (Gen 3)</option>
+      <option value="nb_es">Segway Ninebot ES1 / ES2 / ES4 / E-Serie</option>
+      <option value="xiaomi">Xiaomi Mi Scooter (1S / Pro 2 / 3 / Essential)</option>
+      <option value="generic_ble">Universal BLE Controller (FFE0 / FFE1)</option>
+    </select>
+
+    <label>Service UUID (automatisch gesetzt)</label>
+    <input id="serviceUuid">
+
+    <label>Write (RX) Characteristic UUID</label>
+    <input id="charUuid">
+
+    <label>Notify (TX) Characteristic UUID</label>
+    <input id="notifyUuid">
+
+    <button id="connectBtn" class="btn-primary">1. Scooter suchen & verbinden</button>
+  </div>
+
+  <div class="card">
+    <h3>⚡ Tuning- & Flash-Konfiguration</h3>
+
+    <label>Geschwindigkeits-Profil</label>
+    <select id="speedSelect">
+      <option value="20">20 km/h – Straßenmodus (DE / eKFV)</option>
+      <option value="25">25 km/h – EU-Offroad (Nur Privatgelände)</option>
+      <option value="30">30 km/h – US-Sport (Nur Privatgelände)</option>
+      <option value="35">35 km/h – Stage 1 (Nur Privatgelände)</option>
+      <option value="40">40 km/h – Stage 2 (Nur Privatgelände)</option>
+      <option value="45">45 km/h – Max Unlock (Nur Privatgelände)</option>
+    </select>
+
+    <label>Fahrmodus / Region-Flag</label>
+    <select id="regionSelect">
+      <option value="DE">DE (Standard 20 km/h)</option>
+      <option value="EU">EU (25 km/h)</option>
+      <option value="US">US (30+ km/h)</option>
+      <option value="SHFW">SHFW / Custom Firmware Register</option>
+    </select>
+
+    <label>Eigene Hex-Sequenz (optional – ohne Checksumme eingeben)</label>
+    <input id="customHex" placeholder="z.B. 5A A5 02 3E 20 02 72 1E 00">
+
+    <div class="warning-box">
+      <strong>⚠️ Wichtiger Hinweis (StVO / eKFV):</strong><br>
+      Tuning und das Aufheben der 20-km/h-Grenze führen zum Erlöschen der Betriebserlaubnis und des Versicherungsschutzes. Das Flashen über 20 km/h ist <strong>ausschließlich für abgesperrtes Privatgelände</strong> bestimmt.
+    </div>
+
+    <label class="checkbox-row">
+      <input type="checkbox" id="privateConfirm">
+      <span>Ich bestätige, dass dieser E-Scooter <strong>ausschließlich auf abgesperrtem Privatgelände</strong> gefahren wird und ich das Risiko für Controller/Akku selbst trage.</span>
+    </label>
+
+    <button id="flashBtn" class="btn-flash" disabled>2. Profil flashen (Nur Privatgelände)</button>
+    <button id="resetBtn" class="btn-reset" disabled>🔄 Panik-Reset auf 20 km/h (Straße)</button>
+  </div>
+
+  <div class="card">
+    <h3>📟 Live-Konsole & BLE-Antworten</h3>
+    <pre id="log">Wähle dein Scooter-Modell und tippe auf „Verbinden“...</pre>
+  </div>
+
+  <script>
+    const MODEL_PROFILES = {
+      nb_max_g30: {
+        name: 'Ninebot MAX G30/G30D',
+        service: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+        write: '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
+        notify: '6e400003-b5a3-f393-e0a9-e50e24dcca9e',
+        protocol: 'ninebot'
+      },
+      nb_g2: {
+        name: 'Ninebot MAX G2/G2D',
+        service: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+        write: '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
+        notify: '6e400003-b5a3-f393-e0a9-e50e24dcca9e',
+        protocol: 'ninebot'
+      },
+      nb_f_series: {
+        name: 'Ninebot F-Serie / F2',
+        service: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+        write: '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
+        notify: '6e400003-b5a3-f393-e0a9-e50e24dcca9e',
+        protocol: 'ninebot'
+      },
+      nb_gen3: {
+        name: 'Ninebot G3 / ZT3 / GT3',
+        service: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+        write: '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
+        notify: '6e400003-b5a3-f393-e0a9-e50e24dcca9e',
+        protocol: 'ninebot'
+      },
+      nb_es: {
+        name: 'Ninebot ES/E-Serie',
+        service: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+        write: '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
+        notify: '6e400003-b5a3-f393-e0a9-e50e24dcca9e',
+        protocol: 'ninebot'
+      },
+      xiaomi: {
+        name: 'Xiaomi Mi Scooter',
+        service: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+        write: '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
+        notify: '6e400003-b5a3-f393-e0a9-e50e24dcca9e',
+        protocol: 'xiaomi'
+      },
+      generic_ble: {
+        name: 'Universal BLE Controller',
+        service: '0000ffe0-0000-1000-8000-00805f9b34fb',
+        write: '0000ffe1-0000-1000-8000-00805f9b34fb',
+        notify: '0000ffe1-0000-1000-8000-00805f9b34fb',
+        protocol: 'generic'
+      }
+    };
+
+    let bleDevice = null;
+    let bleServer = null;
+    let isConnected = false;
+
+    const modelSelect = document.getElementById('modelSelect');
+    const serviceInput = document.getElementById('serviceUuid');
+    const charInput = document.getElementById('charUuid');
+    const notifyInput = document.getElementById('notifyUuid');
+    const logEl = document.getElementById('log');
+    const flashBtn = document.getElementById('flashBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const privateConfirm = document.getElementById('privateConfirm');
+
+    function log(msg) {
+      const t = new Date().toLocaleTimeString();
+      logEl.textContent += `\n[${t}] ${msg}`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function applyModelPreset() {
+      const p = MODEL_PROFILES[modelSelect.value];
+      serviceInput.value = p.service;
+      charInput.value = p.write;
+      notifyInput.value = p.notify;
+      log(`Profil geladen: ${p.name}`);
+    }
+
+    modelSelect.addEventListener('change', applyModelPreset);
+    applyModelPreset();
+
+    function updateButtons() {
+      flashBtn.disabled = !(isConnected && privateConfirm.checked);
+      resetBtn.disabled = !isConnected;
+    }
+
+    privateConfirm.addEventListener('change', updateButtons);
+
+    // Ninebot / Xiaomi 16-Bit Checksumme: (~sum) & 0xFFFF in Little Endian
+    function buildPacketWithChecksum(headerBytes, bodyBytes) {
+      let sum = 0;
+      for (const b of bodyBytes) sum += b;
+      const crc = (~sum) & 0xFFFF;
+      const csumL = crc & 0xFF;
+      const csumH = (crc >> 8) & 0xFF;
+      return new Uint8Array([...headerBytes, ...bodyBytes, csumL, csumH]);
+    }
+
+    function createSpeedPacket(protocol, speedKmh) {
+      const speedVal = speedKmh * 100; // Viele Ninebot-Register nutzen 0.01 km/h oder direkt km/h
+      const speedLow = speedVal & 0xFF;
+      const speedHigh = (speedVal >> 8) & 0xFF;
+
+      if (protocol === 'ninebot') {
+        // Ninebot Frame: 5A A5 | LEN | SRC (0x3E Phone) | DST (0x20 ESC) | CMD (0x02 Write) | REG (0x72 Speed Limit) | DATA (2 Bytes)
+        return buildPacketWithChecksum([0x5A, 0xA5], [0x02, 0x3E, 0x20, 0x02, 0x72, speedLow, speedHigh]);
+      } else if (protocol === 'xiaomi') {
+        // Xiaomi Frame: 55 AA | LEN | DST (0x20) | CMD (0x02) | REG (0x72) | DATA
+        return buildPacketWithChecksum([0x55, 0xAA], [0x03, 0x20, 0x02, 0x72, speedLow, speedHigh]);
+      } else {
+        const csum = (0x03 + 0x20 + speedKmh) & 0xFF;
+        return new Uint8Array([0x55, 0xAA, 0x03, 0x20, speedKmh, csum]);
+      }
+    }
+
+    document.getElementById('connectBtn').addEventListener('click', async () => {
+      try {
+        const sUuid = serviceInput.value.trim().toLowerCase();
